@@ -14,8 +14,8 @@ dotenv.config();
 const execPromise = promisify(exec);
 
 // Ensure storage directories exist
-const DB_FILE = path.join(process.cwd(), "vocal_harvester_db.json");
-const AUDIO_DIR = path.join(process.cwd(), "harvested_samples");
+const DB_FILE = path.join(process.cwd(), process.env.TEST_DB_FILE || "vocal_harvester_db.json");
+const AUDIO_DIR = path.join(process.cwd(), process.env.TEST_AUDIO_DIR || "harvested_samples");
 if (!fs.existsSync(AUDIO_DIR)) {
   fs.mkdirSync(AUDIO_DIR, { recursive: true });
 }

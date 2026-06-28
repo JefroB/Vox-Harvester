@@ -35,6 +35,8 @@ A skill is relevant if the task involves ANY of the following:
 | `refactoring.md` | Restructuring code, extracting functions, reducing coupling, code smells |
 | `skill-authoring.md` | Creating new skills, tagging system, frontmatter format |
 | `local-model-review.md` | Reviewing output from local Ollama models, known weaknesses checklist |
+| `playwright-e2e.md` | Writing end-to-end UI tests, browser automation, Page Object Models, Playwright config |
+| `audio-analysis.md` | Speech-to-text, transcription, word-level timestamps, audio feature extraction, Whisper |
 
 This table is a starting point. New skills may be added at any time. Always scan the folder — do not rely on a hardcoded list.
 

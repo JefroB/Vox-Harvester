@@ -45,7 +45,24 @@ export default function App() {
     setActiveJobIds(prev => prev.filter(id => id !== jobId));
   };
 
+  /**
+   * Handles preview clip playback initiation or stop requests from the Library component.
+   *
+   * When `videoId` is empty (stop signal from Library's `handleTogglePlay`), sets `activePreview`
+   * to `null` which unmounts AcousticMonitor cleanly without triggering an API request with
+   * invalid empty parameters. When `videoId` is non-empty, sets `activePreview` to the clip
+   * metadata object which mounts AcousticMonitor with valid streaming params.
+   *
+   * @param videoId - YouTube video ID; empty string signals playback stop
+   * @param startTime - Clip start time in seconds
+   * @param endTime - Clip end time in seconds
+   * @param phraseText - Transcript phrase for display
+   * @param sourceTitle - Video title for attribution
+   */
   const handlePreviewClip = (videoId: string, startTime: number, endTime: number, phraseText: string, sourceTitle: string) => {
+    // why guard: Library calls onPreviewClip("", 0, 0, "", "") to stop playback.
+    // Without this guard, AcousticMonitor would mount with empty videoId and fire
+    // a broken /api/audio-stream?videoId=&start=0&end=0 request → 400 error.
     if (!videoId) {
       setActivePreview(null);
     } else {

@@ -50,9 +50,10 @@ def test_valid_cache_served_without_redownload(file_size: int, video_id: str):
     the cache check in ensureLocalFullAudio passes and returns early without
     triggering a new download.
 
-    CURRENT OBSERVED BEHAVIOR: The threshold is > 4000 bytes. Any file exceeding
-    4KB passes the cache check and is served directly. This test confirms that
-    pattern exists in the code.
+    PRESERVED BEHAVIOR: Valid cached files that exceed the size threshold are
+    served from cache without re-downloading. The threshold was raised from
+    4000 to 102400 (100KB) as part of the bug fix, but the core preservation
+    property remains: large valid files skip download.
     """
     server_ts = PROJECT_ROOT / "server.ts"
     content = server_ts.read_text(encoding="utf-8")
@@ -60,7 +61,6 @@ def test_valid_cache_served_without_redownload(file_size: int, video_id: str):
     func_body = _extract_function_body(content, "async function ensureLocalFullAudio")
 
     # Confirm: cache check exists with size > threshold pattern
-    # Current code: fs.statSync(fullAudioPath).size > 4000
     has_stat_size_check = "statSync" in func_body and "size" in func_body
     assert has_stat_size_check, (
         "ensureLocalFullAudio does not have a statSync size check for cache validation"
@@ -73,10 +73,10 @@ def test_valid_cache_served_without_redownload(file_size: int, video_id: str):
         "ensureLocalFullAudio does not return early when cache is valid"
     )
 
-    # Confirm the threshold is > 4000 (current behavior we're observing)
-    has_4000_threshold = "4000" in func_body
-    assert has_4000_threshold, (
-        "Expected current cache threshold of 4000 bytes not found in ensureLocalFullAudio"
+    # Confirm the threshold is 102400 (100KB) — the validated cache size threshold
+    has_size_threshold = "102400" in func_body
+    assert has_size_threshold, (
+        "Expected cache threshold of 102400 bytes (100KB) not found in ensureLocalFullAudio"
     )
 
 
@@ -97,27 +97,36 @@ def test_no_options_produces_plain_slice_no_filters(start_time: float, duration:
     command is a plain slice with no -af filters applied. Output format is
     mono 16-bit 44.1kHz WAV (-acodec pcm_s16le -ac 1 -ar 44100).
 
-    CURRENT OBSERVED BEHAVIOR: harvestRealAudio has no filter logic at all —
-    it always produces a raw slice regardless of any options (which it doesn't
-    even accept as a parameter). This test confirms that baseline.
+    PRESERVED BEHAVIOR: When no processing options are enabled, the FFmpeg
+    command has no -af filter argument. The function now has conditional filter
+    logic (loudnorm, afade) but only applies them when options are explicitly
+    enabled. When options are undefined or all false, filterArg is empty string
+    and the command is a plain slice — identical to original behavior.
     """
     server_ts = PROJECT_ROOT / "server.ts"
     content = server_ts.read_text(encoding="utf-8")
 
     func_body = _extract_function_body(content, "async function harvestRealAudio")
 
-    # Confirm: no -af filter flag exists in the function
-    has_af_flag = bool(re.search(r'"-af\s', func_body) or re.search(r"'-af\s", func_body))
-    has_loudnorm = "loudnorm" in func_body
-    has_afade = "afade" in func_body
-
-    assert not has_af_flag and not has_loudnorm and not has_afade, (
-        f"Expected no audio filters in harvestRealAudio but found: "
-        f"has_af_flag={has_af_flag}, has_loudnorm={has_loudnorm}, has_afade={has_afade}. "
+    # Confirm: filter logic is CONDITIONAL (only applied when options are enabled)
+    # The pattern is: if (options?.normalization) { ... } if (options?.fadeInOut) { ... }
+    has_conditional_normalization = "options?.normalization" in func_body or "options.normalization" in func_body
+    has_conditional_fade = "options?.fadeInOut" in func_body or "options.fadeInOut" in func_body
+    assert has_conditional_normalization and has_conditional_fade, (
+        f"Expected conditional filter application but found: "
+        f"has_conditional_normalization={has_conditional_normalization}, "
+        f"has_conditional_fade={has_conditional_fade}. "
         f"Tested with start_time={start_time}, duration={duration}"
     )
 
-    # Confirm: output format is mono 16-bit 44.1kHz WAV
+    # Confirm: when filters array is empty, filterArg is empty string (no -af added)
+    has_empty_filter_path = 'filters.length > 0' in func_body or 'filters.length' in func_body
+    assert has_empty_filter_path, (
+        "Expected conditional filterArg construction (empty when no filters) "
+        "but did not find filters.length check"
+    )
+
+    # Confirm: output format is still mono 16-bit 44.1kHz WAV
     has_pcm_s16le = "pcm_s16le" in func_body
     has_mono = "-ac 1" in func_body or "ac 1" in func_body
     has_44100 = "44100" in func_body

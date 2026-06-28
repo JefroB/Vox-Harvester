@@ -42,3 +42,6 @@ __pycache__/
 
 # Node (if applicable)
 node_modules/
+
+.kiro/
+.subagentcoder/

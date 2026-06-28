@@ -53,9 +53,9 @@ This task list implements the audio pipeline reliability fixes using the explora
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
   - [local-coder: --tags code test --complexity complex --context server.ts src/App.tsx src/components/Library.tsx --output tests/test_preservation.py]
 
-- [ ] 3. Fix for audio pipeline reliability failures
+- [x] 3. Fix for audio pipeline reliability failures
 
-  - [ ] 3.1 Await FFmpeg detection before accepting traffic (Bug 1.2)
+  - [x] 3.1 Await FFmpeg detection before accepting traffic (Bug 1.2)
     - Move `detectFFmpeg()` call inside `startServer()` function
     - Add `await` before `detectFFmpeg()` so it completes before `app.listen()`
     - Remove fire-and-forget call at module level (~line 54 of `server.ts`)
@@ -66,7 +66,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 2.2_
     - [local-coder: --tags code --complexity simple --context server.ts --output server.ts --scope startServer]
 
-  - [ ] 3.2 Add yt-dlp detection and local download fallback (Bug 1.1)
+  - [x] 3.2 Add yt-dlp detection and local download fallback (Bug 1.1)
     - Add `detectYtDlp()` function similar to `detectFFmpeg()` that checks `yt-dlp --version`
     - Store result in `hasYtDlp` boolean
     - Await `detectYtDlp()` during startup alongside FFmpeg detection
@@ -79,7 +79,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 2.1_
     - [local-coder: --tags code --complexity complex --context server.ts --output server.ts --scope detectYtDlp,ensureLocalFullAudio]
 
-  - [ ] 3.3 Implement cache validation with size threshold and FFmpeg probe (Bug 1.6)
+  - [x] 3.3 Implement cache validation with size threshold and FFmpeg probe (Bug 1.6)
     - Change cache validity check from `size > 4000` to `size > 102400` (100KB minimum)
     - Add FFmpeg probe validation: run `ffmpeg -v error -i "<cachePath>" -f null -`
     - If probe exits non-zero OR file <100KB, delete cached file and trigger re-download
@@ -90,7 +90,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 2.6, 3.1_
     - [local-coder: --tags code --complexity simple --context server.ts --output server.ts --scope ensureLocalFullAudio]
 
-  - [ ] 3.4 Apply processing options in harvestRealAudio (Bug 1.3)
+  - [x] 3.4 Apply processing options in harvestRealAudio (Bug 1.3)
     - Modify `harvestRealAudio` signature to accept `options: ProcessingOptions` parameter
     - Update `/api/harvest` endpoint to pass `options` to `harvestRealAudio`
     - Build FFmpeg filter chain conditionally:
@@ -141,7 +141,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 2.7_
     - [cloud-only: documentation corrections require reading actual implementation to verify accuracy — local model hallucinates project details]
 
-  - [ ] 3.10 Add docstrings and inline comments to all new/modified functions
+  - [x] 3.10 Add docstrings and inline comments to all new/modified functions
     - Add JSDoc docstring to `detectYtDlp()` explaining purpose, return type, and side effects
     - Add JSDoc docstring to updated `ensureLocalFullAudio()` documenting the Cobalt → yt-dlp fallback chain and cache validation logic
     - Add JSDoc docstring to updated `harvestRealAudio()` documenting the new `options` parameter and filter chain construction
@@ -151,7 +151,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.6_
     - [cloud-only: docstrings require reading actual implementation to ensure accuracy]
 
-  - [ ] 3.11 Update docs/ARCHITECTURE.md with new audio pipeline design
+  - [x] 3.11 Update docs/ARCHITECTURE.md with new audio pipeline design
     - Document the yt-dlp fallback download path (Cobalt primary → yt-dlp secondary → synth fallback)
     - Document the cache validation strategy (100KB threshold + FFmpeg probe)
     - Document the processing options filter chain (loudnorm, afade)
@@ -161,7 +161,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 2.1, 2.2, 2.3, 2.6_
     - [cloud-only: architecture docs require reading actual implementation to verify accuracy]
 
-  - [ ] 3.12 Verify no stale documentation references remain
+  - [x] 3.12 Verify no stale documentation references remain
     - Search docs/ for references to the old 4KB cache threshold
     - Search docs/ for references to Cobalt as the only download method
     - Search docs/ for any remaining claims that Demucs/WhisperX are functional
@@ -170,7 +170,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 2.7_
     - [cloud-only: stale doc detection requires cross-referencing with actual implementation]
 
-  - [ ] 3.8 Verify bug condition exploration tests now pass
+  - [x] 3.8 Verify bug condition exploration tests now pass
     - **Property 1: Expected Behavior** - Audio Pipeline Reliability Fixes Validated
     - **IMPORTANT**: Re-run the SAME tests from task 1 - do NOT write new tests
     - The tests from task 1 encode the expected behavior for each bug condition
@@ -185,7 +185,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.6_
     - [cloud-only: test execution and verification only — no code generation]
 
-  - [ ] 3.9 Verify preservation tests still pass
+  - [x] 3.9 Verify preservation tests still pass
     - **Property 2: Preservation** - Existing Behavior Unchanged After Fixes
     - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
     - Run preservation property tests from step 2
@@ -194,7 +194,7 @@ This task list implements the audio pipeline reliability fixes using the explora
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
     - [cloud-only: test execution and verification only — no code generation]
 
-- [ ] 4. Checkpoint - Ensure all tests pass
+- [x] 4. Checkpoint - Ensure all tests pass
   - Run full test suite including exploration tests, preservation tests, and any existing unit/integration tests
   - Verify all bug condition tests pass (confirming fixes work)
   - Verify all preservation tests pass (confirming no regressions)

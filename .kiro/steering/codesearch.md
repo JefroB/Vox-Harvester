@@ -2,17 +2,55 @@
 inclusion: always
 ---
 
-# CodeSearch — Pre-indexed search and code intelligence
+# CodeSearch — Primary Code Intelligence Tool
+
+CodeSearch is the FIRST tool for all code discovery, inspection, and understanding. Built-in tools (`read_file`, `read_files`, `read_code`, `grep_search`, `file_search`) are FALLBACK ONLY — used when codesearch fails or returns empty after a genuine attempt.
 
 Run `codesearch context` FIRST to see all commands and the token-efficient workflow.
 
-## Critical rules
+## Enforcement: The Codesearch-First Rule
 
-1. NEVER read whole files. NEVER loop through files reading them one by one.
-2. NEVER use `cat`, `readFile`, shell loops, or equivalent to read source files when codesearch is available.
-3. NEVER iterate over a list of files calling `get-file-content` on each one — this is the same as reading whole files and defeats the purpose of codesearch.
-4. ALWAYS use batch/extraction commands that process multiple files in one call.
-5. ALWAYS prefer codesearch tools over generic file reading for discovery and code inspection.
+**BEFORE using any built-in file tool on source code (.py, .ts, .tsx, .js, .jsx, .json in src/), you MUST:**
+
+1. Have already tried the appropriate codesearch command for the task
+2. Received an empty result, an error, or confirmed that codesearch cannot answer the question
+3. Only THEN may you fall back to a built-in tool
+
+**Violations of this rule:**
+- Using `read_file` or `read_code` on a source file without a prior codesearch attempt in the same turn
+- Using `grep_search` to search source code without first trying `codesearch search-content`
+- Using `file_search` to find source files without first trying `codesearch search-files`
+- Using `read_files` to bulk-read source without first trying `module-summary` or `search-content`
+
+**Exceptions (built-in tools allowed directly):**
+- `.kiro/` files (specs, steering, config, hooks, scripts)
+- `docs/` folder files
+- `package.json`, `pyproject.toml`, `tsconfig.json`, and root config files
+- Files you are ABOUT TO EDIT (you need the exact current content for `str_replace`)
+- Files explicitly provided by the user in context (#File references)
+
+## Decision Matrix
+
+| I need to... | Use this FIRST | Fallback if it fails |
+|---|---|---|
+| Find where something is defined | `codesearch get-definition <NAME>` | `grep_search` |
+| Read a function's implementation | `codesearch get-symbol-code <NAME>` | `read_file` with line range |
+| Understand a module's structure | `codesearch module-summary <FILE>` | `read_code` |
+| Search for a pattern across files | `codesearch search-content "query"` | `grep_search` |
+| Find files by name | `codesearch search-files <PATTERN>` | `file_search` |
+| Understand call relationships | `codesearch get-callers/get-callees <NAME>` | `grep_search` for references |
+| Get project overview | `codesearch project-overview` or `repo-map` | `list_directory` with depth |
+| Find architecture relationships | `codesearch graph explain <NODE>` | N/A (no equivalent) |
+| Extract test patterns | `codesearch extract-test-cases <PAT>` | `grep_search` + `read_file` |
+| Edit a file (need current content) | `read_file` directly (exception) | — |
+
+## Critical Rules
+
+1. NEVER read whole source files without a prior codesearch attempt.
+2. NEVER loop through files reading them one by one — use batch codesearch commands.
+3. NEVER use `cat`, shell loops, or equivalent for source file reading.
+4. ALWAYS prefer codesearch for discovery and inspection over generic file reading.
+5. If codesearch is down or the index is stale, say so explicitly before falling back to built-in tools.
 
 ## Workflow (follow this order)
 
@@ -45,14 +83,22 @@ Run `codesearch context` FIRST to see all commands and the token-efficient workf
    - Always use `--start-line` and `--end-line`. Do NOT omit them.
    - If you need content from multiple files, you are doing it wrong. Go back to step 3 or use `search-content`.
 
-## Recovery rules (when a command fails or returns empty)
+## Fallback Chain (when codesearch fails)
 
-1. If `module-summary` fails, try `get-symbol-code <ClassName>` instead — never fall back to readFile/readMultipleFiles.
-2. If `get-symbol-code` fails, try `search-content` with a more specific query to find the exact lines you need.
-3. NEVER fall back to readFile, readMultipleFiles, or cat. If codesearch can't find it, tell the user and ask for guidance.
-4. The fallback chain is: module-summary → get-symbol-code → search-content → ASK THE USER. File reading is not in this chain.
+```
+codesearch command → retry with adjusted query → built-in tool → ASK THE USER
+```
 
-## `--path` usage
+Specific fallback paths:
+1. `module-summary` fails → try `get-symbol-code <ClassName>` → if that fails, `read_code` on the file
+2. `get-symbol-code` fails → try `search-content` with the symbol name → if that fails, `grep_search`
+3. `search-content` returns empty → widen the query OR use `grep_search`
+4. `search-files` returns empty → use `file_search`
+5. Index is stale/missing → state this explicitly, then use built-in tools
+
+**Key rule:** When falling back, state WHY codesearch didn't work (e.g., "codesearch returned empty for X, falling back to grep_search").
+
+## `--path` Usage
 
 `--path` is the PROJECT ROOT where `codesearch index` was run (where `.codesearch/index.db` lives). It is NOT a subfolder or package path. If you're already `cd`'d into the project root, you can omit it.
 
@@ -75,19 +121,42 @@ codesearch search-content "auth" --path "src/packages/adobe-authentication"
 
 ## Anti-patterns (DO NOT DO THESE)
 
-❌ Looping through files with `get-file-content`:
+❌ Using `read_file` on a source file as your first action:
 ```
-for f in "file1.js" "file2.js" "file3.js"; do
-  codesearch get-file-content "$f" --start-line 1 --end-line 80
-done
+# WRONG — no codesearch attempt first
+read_file("src/audio_validation/preprocessor.py")
 ```
-This is just reading whole files with extra steps. Use a batch command instead.
 
-✅ Correct approach for test extraction:
+✅ Correct approach:
 ```
-codesearch extract-test-cases "parentalControls" --output results.md --path .
+codesearch module-summary src/audio_validation/preprocessor.py
+# Then if needed:
+codesearch get-symbol-code PreprocessorClass
 ```
-One command, all matching files processed, structured output.
+
+❌ Using `grep_search` as your first search tool:
+```
+# WRONG — codesearch search-content should come first
+grep_search(query="validate_input", includePattern="**/*.py")
+```
+
+✅ Correct approach:
+```
+codesearch search-content "validate_input"
+# Only if empty: grep_search as fallback
+```
+
+❌ Looping through files with `get-file-content` or `read_files`:
+```
+# WRONG — batch reading defeats codesearch
+read_files(paths=["file1.py", "file2.py", "file3.py"])
+```
+
+✅ Correct approach:
+```
+codesearch extract-test-cases "parentalControls" --output results.md
+# One command, all matching files processed, structured output
+```
 
 ❌ Reading a file then manually searching through it:
 ```
@@ -100,7 +169,7 @@ codesearch search-content "validate_input"
 codesearch get-symbol-code validate_input
 ```
 
-## Command syntax reminders
+## Command Syntax Reminders
 
 ```
 codesearch extract-test-cases <PATTERN> --output FILE [--path PATH] [--exclude PAT] [--filter-path PREFIX] [--test-type TYPE] [--format markdown|json]
@@ -118,6 +187,6 @@ codesearch graph neighbours <NODE> [--depth N] [--provenance EXTRACTED|INFERRED|
 PATTERN is always a positional argument (first arg), not an option.
 `--path` is always the project root directory, never a file path.
 
-## Dev conventions
+## Dev Conventions
 
 - Run tests: `.venv/bin/python -m pytest .subagentcoder/tests/ --no-header -q`

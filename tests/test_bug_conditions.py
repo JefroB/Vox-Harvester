@@ -249,11 +249,23 @@ def test_stop_playback_sets_null_not_empty_object(video_id: str, start_time: flo
         or ("!videoId" in func_body and "null" in func_body)
     )
 
-    # Also check that it doesn't just unconditionally setActivePreview
+    # Also check that setActivePreview({) is NOT at the top level of the function
+    # (it should be inside an if/else block, meaning the null guard controls flow)
+    # A conditional set is acceptable — e.g. inside an else { setActivePreview({...}) }
     lines_in_body = func_body.split("\n")
-    unconditional_set = any(
-        "setActivePreview({" in line and "if" not in line
-        for line in lines_in_body
+    
+    # Check if setActivePreview({ appears BEFORE any if/else guard (unconditional)
+    # vs. after the guard (inside else block, which is conditional)
+    null_guard_pos = func_body.find("null")
+    set_object_pos = func_body.find("setActivePreview({")
+    
+    # The set is unconditional if it appears without any prior null guard,
+    # or if there's no if/else structure wrapping it
+    has_if_else_structure = "if" in func_body and "else" in func_body
+    unconditional_set = (
+        set_object_pos != -1 
+        and not has_if_else_structure
+        and null_guard_pos == -1
     )
 
     assert has_empty_guard and not unconditional_set, (

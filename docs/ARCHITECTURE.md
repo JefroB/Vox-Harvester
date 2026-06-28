@@ -19,12 +19,21 @@ The diagram below outlines the full-stack pipeline from a user's initial YouTube
          │                                 │                                      │
          ├─ 3. Select Phrase & Offset ────>│─ Parallel Cobalt Request ───────────>│ [ Cobalt Downloader Pool ]
          │  (Triggers Stream or Harvest)   │  (Concurrent POST to resolve MP3 URL)│
+         │                                 │  ┌───────────────────────────────────┐│
+         │                                 │  │ On Cobalt failure:               ││
+         │                                 │  │  yt-dlp CLI fallback ───────────>││ [ yt-dlp Binary ]
+         │                                 │  │  (local audio-only extraction)   ││
+         │                                 │  └───────────────────────────────────┘│
+         │                                 │                                      │
+         │                                 │─ Cache Validation ──────────────────>│ [ FFmpeg Probe ]
+         │                                 │  (≥100KB size + decode-to-null check)│
          │                                 │                                      │
          │                                 │─ Cached Master MP3 ─────────────────>│ [ Local disk storage ]
          │                                 │  (audio_cache/video_id_full.mp3)     │
          │                                 │                                      │
          │                                 │─ Accurate FFmpeg Slicing ───────────>│ [ FFmpeg Binary Utility ]
          │                                 │  (WAV generation: -i input -ss)      │
+         │                                 │  (Optional: -af loudnorm, afade)     │
          │                                 │                                      │
          │<─ 4. Stream Sliced WAV ─────────│─ Serve WAV ──────────────────────────┤
          │  (Audio Player & Canvas Peaks)  │  (Generate Waveform Visual Peaks)    │
@@ -71,7 +80,76 @@ To achieve rapid, reliable audio downloads without proxy rotation costs, the bac
 4. Using `Promise.any()`, the backend captures the **first successful response** that resolves a direct audio streaming/download link.
 5. The remaining slow or failing requests are immediately aborted using a short `AbortSignal` timeout (4000ms), maintaining high responsiveness.
 
-**Known Limitation:** All Cobalt instances are public and may go offline without notice. When all 9 instances are unreachable, audio downloads fail with a 500 error. A local `yt-dlp` fallback is **planned** but not yet implemented.
+**Fallback Chain:** All Cobalt instances are public and may go offline without notice. When all 9 instances are unreachable, the system automatically falls back to `yt-dlp` (a local CLI tool) to download the audio directly from YouTube. The fallback chain is:
+
+1. **Cobalt (primary)** — Parallel requests to 9 public instances via `Promise.any()`. First successful response wins.
+2. **yt-dlp (secondary)** — If Cobalt fails entirely, and `hasYtDlp` is `true` (detected at startup), the server spawns a child process: `yt-dlp -x --audio-format mp3 --audio-quality 128K -o "<path>" "<url>"`. This produces an equivalent MP3 file in `audio_cache/`.
+3. **Synth fallback (last resort)** — If the caller is a preview/stream endpoint and both download methods fail, the system falls back to `generateVocalSynthWav` which produces a synthesized WAV buffer as a last-resort audio source.
+
+---
+
+## 🔍 Cache Validation Strategy
+
+Before serving a cached audio file from `audio_cache/`, the system validates it with a two-step check to prevent corrupted or truncated downloads from being served indefinitely:
+
+### Step 1: Size Threshold (≥100KB)
+
+The file must exceed **102,400 bytes** (100KB). This threshold exists because:
+- A truncated HTTP download (network interruption during Cobalt fetch) can easily produce a file >4KB but <100KB
+- Even the shortest valid YouTube audio streams produce files well above 100KB when encoded at 128kbps MP3
+- Files below this threshold are deleted and the download is retried
+
+### Step 2: FFmpeg Probe Verification
+
+Files passing the size check are decoded through FFmpeg to confirm they contain valid audio:
+
+```
+ffmpeg -v error -i "<cachePath>" -f null -
+```
+
+This decodes the entire file to `/dev/null`. If FFmpeg exits with a non-zero code (indicating parse errors, corrupted frames, or non-audio content like an HTML error page), the file is deleted and re-downloaded.
+
+### Validation Flow
+
+```text
+Cache file exists?
+  ├─ No → Download (Cobalt → yt-dlp fallback)
+  └─ Yes
+       ├─ Size < 100KB → Delete, re-download
+       └─ Size ≥ 100KB
+            ├─ FFmpeg probe fails → Delete, re-download
+            └─ FFmpeg probe passes → Serve from cache ✓
+```
+
+Valid cached files (≥100KB, passing probe) continue to be served without triggering any download — the validation adds negligible latency for valid files.
+
+---
+
+## 🚦 Startup Gating Sequence
+
+The server uses a gated startup sequence to prevent race conditions where early HTTP requests see tools as unavailable:
+
+```typescript
+async function startServer() {
+  const app = express();
+  // ... route registration ...
+
+  await detectFFmpeg();  // Sets hasFFmpeg boolean
+  await detectYtDlp();   // Sets hasYtDlp boolean
+
+  app.listen(PORT, "0.0.0.0", () => { ... });
+}
+```
+
+### Why This Matters
+
+Both `detectFFmpeg()` and `detectYtDlp()` are awaited **before** `app.listen()` is called. This guarantees:
+
+- `hasFFmpeg` accurately reflects whether FFmpeg is installed before any `/api/harvest` or `/api/audio-stream` request arrives
+- `hasYtDlp` accurately reflects whether the yt-dlp fallback is available before any download request arrives
+- No request can arrive during the ~100–500ms detection window and incorrectly see tools as unavailable
+
+Without this gating, a fire-and-forget async detection at module scope could leave the booleans as `false` when the first request hits, causing harvest failures on a system where FFmpeg is actually installed.
 
 ---
 
