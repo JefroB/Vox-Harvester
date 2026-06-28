@@ -1,0 +1,4 @@
+# file: D:\SubAgent-Coder\.subagentcoder\local_coder\scaffolding_selector.py
+# hypothesis_version: 6.151.9
+
+[4000, '*', '---', '.js', '.kiro', '.md', '.py', '.ts', 'any', 'category', 'complexity', 'description', 'name', 'priority', 'project', 'scaffolding', 'shared', 'tags', 'uncategorized', 'utf-8']

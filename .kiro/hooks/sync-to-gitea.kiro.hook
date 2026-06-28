@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Sync to Gitea",
+  "description": "Pushes the local-dev branch to the Gitea server for cloud review. Handles the double-push quirk automatically.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "git push origin local-dev 2>&1 || git push origin local-dev"
+  }
+}

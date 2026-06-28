@@ -1,0 +1,4 @@
+# file: D:\SubAgent-Coder\.subagentcoder\local_coder\result_database.py
+# hypothesis_version: 6.151.9
+
+[0.0, 100, ' AND model_used = ?', ' AND outcome = ?', ' AND timestamp <= ?', ' AND timestamp >= ?', 'affected_levels', 'avg_iterations', 'avg_tokens', 'cloud', 'complexity_score', 'count', 'date_from', 'date_range', 'date_to', 'delegation_method', 'error_type', 'escalated', 'fail', 'failure_rate', 'file_tags', 'from', 'insufficient_data', 'local', 'model', 'model_used', 'outcome', 'outcome_breakdown', 'per_complexity_rates', 'per_model_rates', 'success', 'success_rate', 'successes', 'to', 'top_error_types', 'total', 'total_tasks']

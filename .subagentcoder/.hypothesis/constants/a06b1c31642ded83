@@ -1,0 +1,4 @@
+# file: D:\SubAgent-Coder\.subagentcoder\orchestrator\routing.py
+# hypothesis_version: 6.151.9
+
+[10.0, 200, 32768, '(?i)', '(?i)\\b', 'GET', '\\b', 'api', 'architecture', 'auth', 'auto', 'boilerplate', 'cloud', 'complex logic', 'config', 'data', 'extract', 'local', 'multi step', 'multi-step', 'multiple files', 'pbt', 'property test', 'property-based test', 'reasoning', 'repetitive', 'scaffold', 'sdk', 'security', 'simple', 'single file', 'single-file', 'template']

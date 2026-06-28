@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Validate Task Delegation Tags",
+  "description": "After writing to a tasks.md file, checks that every sub-task has either a [local-coder: ...] or [cloud-only: ...] annotation. Flags any missing annotations so they can be added before execution begins.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/.kiro/specs/*/tasks.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A tasks.md file was just edited. Scan it for sub-tasks (lines matching `- [ ] N.N ...` or `- [ ]* N.N ...`). Every sub-task MUST end with either `[local-coder: --tags ... --complexity ... --context ...]` or `[cloud-only: <reason>]`. Additionally, any sub-task that edits existing code (not creating a new file) MUST include `--output <file>` and `--scope <symbol-or-lines>` in its local-coder annotation. If any sub-task is missing its annotation or missing --output/--scope for edit tasks, list the missing ones and add the appropriate annotation to each. Do NOT modify tasks that already have complete annotations. Parent-level tasks and checkpoint tasks with no sub-tasks should use `[cloud-only: checkpoint]` if they lack an annotation."
+  }
+}

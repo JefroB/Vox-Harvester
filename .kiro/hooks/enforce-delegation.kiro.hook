@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Enforce Local Coder Delegation",
+  "description": "Before executing a spec task, reads the task description and checks for a [local-coder: ...] delegation hint. If present, the agent MUST shell out to local_coder.py — no exceptions.",
+  "version": "2",
+  "when": {
+    "type": "preTaskExecution"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "HARD CONSTRAINT — LOCAL CODER ENFORCEMENT\n\nCheck the task description for `[local-coder: ...]`. If present:\n\n## YOU ARE FORBIDDEN FROM WRITING IMPLEMENTATION CODE YOURSELF\n\nYour ONLY allowed workflow is:\n1. Parse the annotation flags (--tags, --complexity, --context, --output, --scope, --task-id)\n2. Run: `python .kiro/scripts/local_coder.py --task \"<full task description without the annotation>\" <parsed flags>`\n3. Wait for the command to complete\n4. Review the generated output (check for logic bugs, missing imports, anti-patterns)\n5. If fixes are needed, either:\n   a. Make small fixes directly (missing import, typo)\n   b. Re-run local_coder.py with a fix instruction for structural issues\n6. Verify the build passes\n\n## WHAT YOU MUST NOT DO:\n- Write function implementations yourself\n- Generate boilerplate yourself\n- Write test code yourself\n- Skip the local_coder.py call for any reason\n\nThe ONLY exception: if local_coder.py fails (Ollama unreachable, timeout, exit code != 0), you MAY implement directly AS A FALLBACK, but you MUST log: `[DELEGATION-SKIP] local_coder.py failed: <reason>` to stderr first.\n\nIf the task has `[cloud-only: ...]` — ignore this constraint and implement directly."
+  }
+}

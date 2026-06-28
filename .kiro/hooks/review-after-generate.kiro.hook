@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "name": "Review After Local Generation",
+  "description": "When a new Python file is created (likely from local model output), remind the agent to review it.",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "src/**/*.py",
+      "tests/**/*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A new Python file was just created. If this came from the local Ollama model, you MUST review it using codesearch before presenting it to the user. Run: codesearch module-summary <file> and codesearch search-content 'time.sleep' --filter-path <file>. Check for: logic bugs, missing error handling, thread safety issues, incomplete implementations."
+  }
+}

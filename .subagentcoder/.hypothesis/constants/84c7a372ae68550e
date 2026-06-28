@@ -1,0 +1,4 @@
+# file: D:\SubAgent-Coder\.subagentcoder\local_coder\issue_logger.py
+# hypothesis_version: 6.151.9
+
+[0.0, 100, 200, '\n\n---\n\n', '- **date:**', '0', '0 tokens in 0s', 'N/A', '^  - (.+)$', 'complex', 'complexity_tier', 'date', 'docs', 'fail', 'generation_speed', 'issues_found', 'model_used', 'prose', 'quality_notes', 'result', 'review_iterations', 'seconds', 'simple', 'success', 'task_description', 'tokens', 'tokens_generated', 'utf-8', 'w']

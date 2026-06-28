@@ -1,0 +1,4 @@
+# file: D:\SubAgent-Coder\.subagentcoder\local_coder\token_tracker.py
+# hypothesis_version: 6.151.9
+
+[60.0, 10000000, '%Y-%m-%dT%H:%M:%SZ', '=', 'BEGIN', 'COMMIT', 'Net Token Savings', 'Per-Model Breakdown:', 'ROLLBACK', 'Session Summary:', 'calls', 'created_at', 'gross', 'gross_savings', 'initial', 'model', 'net', 'net_savings', 'per_model', 'phase', 'phases', 'review', 'rework', 'session_id', 'sessions_clean', 'sessions_with_rework', 'task_hash', 'token_count', 'total_gross_savings', 'total_net_savings', 'total_review_cost', 'updated_at']

@@ -1,0 +1,6 @@
+{
+  "name": "YouTube Vocal Harvester",
+  "description": "Search YouTube, find spoken phrases in transcripts, extract matching audio clips, process into production-ready vocal samples, and manage in a searchable library.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

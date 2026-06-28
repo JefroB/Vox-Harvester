@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Verify Local Coder Delegation",
+  "description": "After a spec task completes, verifies that [local-coder: ...] tasks actually called local_coder.py. Flags delegation failures.",
+  "version": "3",
+  "when": {
+    "type": "postTaskExecution"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A spec task just completed. Perform a delegation compliance check:\n\n1. Check if the task description contains `[local-coder: ...]`.\n2. If YES — verify that `python .kiro/scripts/local_coder.py` was called during execution:\n   - Look for shell commands in your execution history that invoked local_coder.py\n   - If found: delegation succeeded. No action needed (local_coder.py records to the result DB itself via --task-id).\n   - If NOT found: DELEGATION FAILURE. Log a warning:\n     `[DELEGATION-FAIL] Task <task-id> had [local-coder: ...] annotation but local_coder.py was never called. Cloud tokens were used instead of local model.`\n     Then record a 'fail' result with error_type='delegation_skipped' to the result database so it shows up in stats.\n3. If the task has `[cloud-only: ...]` — no verification needed, skip.\n\nNOTE: Do NOT re-record successful local_coder.py calls — the script already writes to the result database when --task-id is provided. Only record delegation failures."
+  }
+}

@@ -1,0 +1,44 @@
+
+# Piggie extension files
+.piggie/
+
+# CodeSearch index (local only)
+.codesearch/
+
+# Ollama / Local model artifacts
+*.gguf
+*.bin
+models/
+
+# Local logs
+logs/
+*.log
+
+# IDE / Editor
+.vscode/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+
+# SubAgent-Coder internals
+.subagentcoder/__pycache__/
+.subagentcoder/*/__pycache__/
+.subagentcoder/tests/__pycache__/
+.subagentcoder/task_results.db
+
+# Hypothesis test cache
+.hypothesis/
+
+# Benchmarks
+.benchmarks/
+
+# Node (if applicable)
+node_modules/

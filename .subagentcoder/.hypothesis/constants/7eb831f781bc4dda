@@ -1,0 +1,4 @@
+# file: D:\SubAgent-Coder\.subagentcoder\local_coder\hallucination_guard.py
+# hypothesis_version: 6.151.9
+
+['  +', ')\\b', 'Import statement', '\\b(', '^\\s*class\\s+(\\w+)', '^\\s*def\\s+(\\w+)', '^from\\s+\\S+\\s+import', '^import\\s+', 'from_import', 'import_statement', 'project_symbol', 'r', 'utf-8', '|']

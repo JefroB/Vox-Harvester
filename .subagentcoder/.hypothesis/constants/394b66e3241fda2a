@@ -1,0 +1,4 @@
+# file: D:\SubAgent-Coder\.subagentcoder\models\task_graph.py
+# hypothesis_version: 6.151.9
+
+[500, 1024, 'auto', 'checkpoint', 'cloud', 'complex', 'implementation', 'local', 'parallel', 'prose', 'sequential', 'simple']

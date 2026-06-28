@@ -1,0 +1,4 @@
+# file: D:\SubAgent-Coder\.subagentcoder\orchestrator\__init__.py
+# hypothesis_version: 6.151.9
+
+['CheckpointResult', 'DispatchResult', 'RoutingDecision', 'TaskResult', 'WaveController', 'auto_assign_routing', 'dispatch_task_graph', 'enforce_routing', 'run_checkpoint', 'should_skip_review']
