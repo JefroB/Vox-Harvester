@@ -115,6 +115,21 @@ with indexed seeking may become necessary.
 
 ## 5. Keeping Docs Current
 
+### Two READMEs — Both Must Stay Updated
+
+This project has two README files with distinct roles:
+
+| File | Role | Content |
+|---|---|---|
+| `README.md` (root) | Project introduction and quick-start | Brief overview, tech stack summary, quick-start commands, links into `docs/` |
+| `docs/README.md` | Full developer handbook and docs index | Detailed architecture, user flows, resolved bugs, links to all other docs |
+
+**Update rules:**
+- When a new doc is added to `docs/`, add it to BOTH the root README's documentation section AND `docs/README.md`'s table of contents.
+- When the tech stack changes, update BOTH READMEs.
+- When user-facing features change, update the root README's "How It Works" section and `docs/README.md`'s detailed flow.
+- The root README links to `docs/README.md` as the authoritative deep-dive. Never duplicate the full handbook content in the root.
+
 ### The Staleness Problem
 
 Stale docs are worse than no docs — they actively mislead. Documentation MUST be treated as part of the implementation, not a separate chore.

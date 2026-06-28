@@ -66,7 +66,7 @@ During development, two major bugs affected the system's core capabilities. Unde
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Cobalt parallel download | ✅ Active | Primary audio source; depends on 9 public instances |
-| Local yt-dlp fallback | 🔜 Planned | Fallback when all Cobalt instances are down |
+| Local yt-dlp fallback | ✅ Active | Secondary fallback when all Cobalt instances are down |
 | Demucs voice isolation | 🔜 Planned | Neural voice separation from background audio |
 | WhisperX silence trimming | 🔜 Planned | Automatic leading/trailing silence removal |
 | FFmpeg loudnorm | ✅ Active | EBU R128 normalization filter |
