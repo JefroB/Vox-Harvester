@@ -1,4 +1,0 @@
-# file: D:\SubAgent-Coder\.subagentcoder\local_coder\scope_enforcer.py
-# hypothesis_version: 6.151.9
-
-[500, ',', ', ', '-', '^\\d+-\\d+$', 'delete', 'description', 'equal', 'line_range', 'list[EditOperation]', 'symbol']

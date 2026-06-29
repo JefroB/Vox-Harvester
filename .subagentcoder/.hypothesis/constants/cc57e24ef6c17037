@@ -1,4 +1,0 @@
-# file: D:\SubAgent-Coder\.subagentcoder\orchestrator\hints.py
-# hypothesis_version: 6.151.9
-
-[500, 16000, 19660, 26214, '--complexity', '--distill', '--scope', '--token-budget', 'complexity', 'contextFiles', 'context_files', 'distill', 'preferLocalCoder', 'prefer_local_coder', 'scope', 'skipReview', 'skip_review', 'tokenBudget', 'token_budget', 'utf-8']

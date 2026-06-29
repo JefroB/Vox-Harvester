@@ -1,4 +1,0 @@
-# file: D:\SubAgent-Coder\.subagentcoder\orchestrator\dispatch.py
-# hypothesis_version: 6.151.9
-
-[10.0, 500, '--output', 'auto', 'checkpoint', 'cloud', 'command', 'context_files_loaded', 'delegation_enforced', 'description', 'dispatch_description', 'duration_seconds', 'estimated_tokens', 'exit_code', 'hints', 'implementation', 'local', 'local_coder_args', 'output', 'output_lines', 'override_reason', 'parallel', 'reason', 'routing', 'sequential', 'subagent_response', 'suggested_action', 'task_id', 'tasks', 'type', 'waves']

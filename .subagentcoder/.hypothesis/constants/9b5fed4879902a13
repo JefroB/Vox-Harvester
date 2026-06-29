@@ -1,4 +1,0 @@
-# file: D:\SubAgent-Coder\.subagentcoder\local_coder\complexity_estimator.py
-# hypothesis_version: 6.151.9
-
-[100, 300, '.cfg', '.conf', '.env', '.ini', '.json', '.lock', '.toml', '.yaml', '.yml', 'API', '_spec', '_test', 'architecture', 'auth', 'complete module', 'complex', 'database', 'design', 'entire', 'full implementation', 'integration', 'middleware', 'migration', 'module', 'multi-step', 'multiple files', 'orchestrat', 'pipeline', 'refactor', 'security', 'service', 'spec.', 'spec_', 'system', 'test.', 'test_']

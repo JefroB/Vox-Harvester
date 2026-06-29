@@ -1,4 +1,0 @@
-# file: D:\SubAgent-Coder\.subagentcoder\local_coder\patch_mode.py
-# hypothesis_version: 6.151.9
-
-[100, 600, '<<<<<<< SEARCH', '=======', '>>>>>>> REPLACE', 'IN_REPLACE', 'IN_SEARCH', 'NORMAL', 'codesearch', 'get-symbol-code', 'utf-8']
