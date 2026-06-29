@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { promisify } from "util";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -123,6 +123,108 @@ if (db.samples.length === 0 || db.samples.some(s => s.video_id === "dQw4w9WgXcQ"
 
 // Shared background job register
 const jobs: Record<string, any> = {};
+
+// IsolationJob interface and related state
+interface IsolationJob {
+  jobId: string; // UUID v4
+  sampleId: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  created_at: string; // ISO 8601
+  updated_at: string; // ISO 8601
+  output_path?: string;
+  error?: string; // max 500 chars
+}
+
+const isolationJobs: IsolationJob[] = [];
+let currentIsolationJob: IsolationJob | null = null;
+const MAX_ISOLATION_QUEUE_DEPTH = 20;
+
+function getPendingIsolationJobCount(): number {
+  return isolationJobs.filter(j => j.status === "pending").length;
+}
+
+/**
+ * Dispatch the next pending isolation job for sequential processing.
+ * Ensures at most one job is in "processing" at any time.
+ * After the current job finishes, automatically dequeues and processes the next pending job.
+ * GPU memory cleanup (torch.cuda.empty_cache()) is handled by the Python isolator.py process.
+ */
+async function dispatchNextIsolationJob() {
+  if (currentIsolationJob) return; // At most one job in "processing" at any time
+
+  const nextJob = isolationJobs.find(j => j.status === "pending");
+  if (!nextJob) return;
+
+  currentIsolationJob = nextJob;
+  await processIsolationJob(nextJob);
+}
+
+/**
+ * Process a single isolation job by spawning the Python isolator child process.
+ * On completion or failure, clears currentIsolationJob and triggers dispatch of next pending job.
+ */
+async function processIsolationJob(job: IsolationJob) {
+  try {
+    job.status = "processing";
+    job.updated_at = new Date().toISOString();
+
+    const currentDB = loadDB();
+    const sample = currentDB.samples.find(s => s.id === job.sampleId);
+    if (!sample) throw new Error("Sample not found");
+
+    const inputPath = path.join(AUDIO_DIR, `${job.sampleId}.wav`);
+    const outputPath = path.join(AUDIO_DIR, `${job.sampleId}_isolated.wav`);
+
+    const env = { ...process.env, PYTHONPATH: path.join(process.cwd(), 'src') + (process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : '') };
+    const pythonProcess = spawn('python', ['-m', 'src.audio_validation.isolator', inputPath, outputPath], {
+      timeout: 300 * 1000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    pythonProcess.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+
+    pythonProcess.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      pythonProcess.on('close', (code) => {
+        if (code === 0) {
+          job.status = "completed";
+          job.output_path = outputPath;
+          job.updated_at = new Date().toISOString();
+
+          // Store API path format (not filesystem path) per design spec
+          sample.isolated_path = `/api/samples/audio/${job.sampleId}_isolated`;
+          saveDB(currentDB);
+
+          resolve();
+        } else {
+          reject(new Error(`Isolation process failed with code ${code}: ${stderr}`));
+        }
+      });
+
+      pythonProcess.on('error', (err) => {
+        reject(err);
+      });
+    });
+
+  } catch (error: any) {
+    job.status = "failed";
+    job.error = error.message.slice(0, 500);
+    job.updated_at = new Date().toISOString();
+  }
+
+  // Clear current job and dispatch next pending job (sequential processing)
+  currentIsolationJob = null;
+  await dispatchNextIsolationJob();
+}
 
 // Initialize Gemini SDK
 const ai = new GoogleGenAI({
@@ -444,22 +546,18 @@ async function harvestRealAudio(
     const localMasterPath = await ensureLocalFullAudio(videoId);
     
     // 2. Build FFmpeg filter chain based on processing options
+    // NOTE: afade filter disabled — ffmpeg-static produces silence when afade is used.
     const filters: string[] = [];
 
     if (options?.normalization) {
-      filters.push("loudnorm=I=-14:TP=-1:LRA=11");
+      filters.push("dynaudnorm=f=150:g=15");
     }
-
-    if (options?.fadeInOut) {
-      // Fade-in: 50ms at start of slice; fade-out: 50ms ending at slice end
-      const fadeOutStart = Math.max(0, duration - 0.05);
-      filters.push(`afade=t=in:st=0:d=0.05,afade=t=out:st=${fadeOutStart}:d=0.05`);
-    }
+    // fadeInOut intentionally skipped — causes silent output with ffmpeg-static binary
 
     // 3. Perform accurate slicing. Placing -ss AFTER -i ensures perfect sample-accurate seeking in local compressed MP3 audio.
-    console.log(`Slicing local master audio [${localMasterPath}] from start:${startTime}s for duration:${duration}s (sample-accurate seek)`);
     const filterArg = filters.length > 0 ? ` -af "${filters.join(',')}"` : "";
     const cmdSafe = `"${binary}" -y -i "${localMasterPath}" -ss ${startTime} -t ${duration}${filterArg} -acodec pcm_s16le -ac 1 -ar 44100 "${outputPath}"`;
+    console.log(`[HARVEST] Running FFmpeg: ${cmdSafe}`);
     await execPromise(cmdSafe);
     
     if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
@@ -1365,13 +1463,34 @@ CRITICAL: Do NOT return Steve Jobs, Neil Gaiman, or Carl Sagan quotes unless the
     res.json({ jobId });
   });
 
-  // API Route: Get Job Status
+  // API Route: Get Job Status (harvest jobs + isolation jobs)
   app.get("/api/jobs/:id", (req, res) => {
-    const job = jobs[req.params.id];
-    if (!job) {
-      return res.status(404).json({ error: "Background job not found or expired" });
+    // Check harvest background jobs first
+    const harvestJob = jobs[req.params.id];
+    if (harvestJob) {
+      return res.json(harvestJob);
     }
-    res.json(job);
+
+    // Check isolation jobs
+    const isolationJob = isolationJobs.find(j => j.jobId === req.params.id);
+    if (isolationJob) {
+      const response: any = {
+        jobId: isolationJob.jobId,
+        sampleId: isolationJob.sampleId,
+        status: isolationJob.status,
+        created_at: isolationJob.created_at,
+        updated_at: isolationJob.updated_at
+      };
+      if (isolationJob.status === "completed" && isolationJob.output_path) {
+        response.output_path = `/api/samples/audio/${isolationJob.sampleId}_isolated`;
+      }
+      if (isolationJob.status === "failed" && isolationJob.error) {
+        response.error = isolationJob.error;
+      }
+      return res.json(response);
+    }
+
+    return res.status(404).json({ error: "Background job not found or expired" });
   });
 
   // API Route: Get all Samples with search filtering
@@ -1454,6 +1573,93 @@ CRITICAL: Do NOT return Steve Jobs, Neil Gaiman, or Carl Sagan quotes unless the
     res.json({ success: true, message: `Removed vocal sample: ${sampleId}` });
   });
 
+  // API Route: Trigger vocal isolation for a sample
+  app.post("/api/samples/:id/isolate", (req, res) => {
+    const { id } = req.params;
+
+    // Validate sample ID format
+    if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+      return res.status(400).json({ error: "Invalid sample ID format. Only alphanumeric characters, hyphens, and underscores are allowed." });
+    }
+
+    // Check sample exists in DB (load fresh to pick up recently harvested samples)
+    const currentDB = loadDB();
+    const sample = currentDB.samples.find(s => s.id === id);
+    if (!sample) {
+      return res.status(404).json({ error: `Sample '${id}' not found.` });
+    }
+
+    // Check WAV file exists on disk
+    const wavPath = path.join(AUDIO_DIR, `${id}.wav`);
+    if (!fs.existsSync(wavPath)) {
+      return res.status(404).json({ error: `WAV file not found on disk for sample '${id}'.` });
+    }
+
+    // Check no existing isolated file (already isolated)
+    if (sample.isolated_path) {
+      return res.status(409).json({ error: `Sample '${id}' is already isolated.` });
+    }
+
+    // Check no active/pending job for this sample
+    const existingJob = isolationJobs.find(j => j.sampleId === id && (j.status === "pending" || j.status === "processing"));
+    if (existingJob) {
+      return res.status(409).json({ error: `Isolation job already in progress for sample '${id}'.` });
+    }
+
+    // Check queue depth
+    if (getPendingIsolationJobCount() >= MAX_ISOLATION_QUEUE_DEPTH) {
+      return res.status(503).json({ error: `Isolation queue is full (${MAX_ISOLATION_QUEUE_DEPTH} pending jobs).`, queueDepth: MAX_ISOLATION_QUEUE_DEPTH });
+    }
+
+    // Create new isolation job
+    const jobId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const newJob: IsolationJob = {
+      jobId,
+      sampleId: id,
+      status: "pending",
+      created_at: now,
+      updated_at: now
+    };
+
+    isolationJobs.push(newJob);
+
+    // Trigger sequential dispatch (will process if no job is currently running)
+    dispatchNextIsolationJob();
+
+    return res.status(202).json({
+      jobId: newJob.jobId,
+      sampleId: newJob.sampleId,
+      status: newJob.status,
+      created_at: newJob.created_at
+    });
+  });
+
+  // API Route: Get isolation job status
+  app.get("/api/isolation-jobs/:jobId", (req, res) => {
+    const job = isolationJobs.find(j => j.jobId === req.params.jobId);
+    if (!job) {
+      return res.status(404).json({ error: "Isolation job not found." });
+    }
+
+    const response: any = {
+      jobId: job.jobId,
+      sampleId: job.sampleId,
+      status: job.status,
+      created_at: job.created_at,
+      updated_at: job.updated_at
+    };
+
+    if (job.status === "completed" && job.output_path) {
+      response.output_path = `/api/samples/audio/${job.sampleId}_isolated`;
+    }
+    if (job.status === "failed" && job.error) {
+      response.error = job.error;
+    }
+
+    return res.json(response);
+  });
+
   // API Route: Add Custom Tag to a Sample
   app.post("/api/samples/:id/tags", (req, res) => {
     const sampleId = req.params.id;
@@ -1523,6 +1729,44 @@ CRITICAL: Do NOT return Steve Jobs, Neil Gaiman, or Carl Sagan quotes unless the
     res.status(404).json({ error: "Peaks not found" });
   });
 
+  // API Route: Stream / Download Isolated WAV Audio
+  app.get("/api/samples/audio/:id_isolated", (req, res, next) => {
+    const paramId = req.params.id_isolated;
+
+    // Only handle IDs ending with _isolated; pass through to generic handler otherwise
+    if (!paramId.endsWith("_isolated")) {
+      return next();
+    }
+
+    const sampleId = paramId.slice(0, -"_isolated".length);
+
+    // Look up sample in DB
+    const currentDB = loadDB();
+    const sample = currentDB.samples.find((s: any) => s.id === sampleId);
+
+    if (!sample) {
+      return res.status(404).json({ error: `Sample '${sampleId}' not found.` });
+    }
+
+    if (!sample.isolated_path) {
+      return res.status(404).json({ error: `No isolated track exists for sample '${sampleId}'.` });
+    }
+
+    // Construct file path and attempt to stream
+    const filePath = path.join(AUDIO_DIR, `${sampleId}_isolated.wav`);
+
+    try {
+      const stat = fs.statSync(filePath);
+      res.setHeader("Content-Type", "audio/wav");
+      res.setHeader("Content-Length", stat.size);
+      res.setHeader("Content-Disposition", `attachment; filename="${sampleId}_isolated.wav"`);
+      fs.createReadStream(filePath).pipe(res);
+    } catch (err: any) {
+      console.error(`Failed to read isolated audio file for sample '${sampleId}':`, err.message || err);
+      return res.status(500).json({ error: `Isolated audio file could not be read for sample '${sampleId}'.` });
+    }
+  });
+
   // API Route: Stream / Download computed WAV Audio
   app.get("/api/samples/audio/:id", (req, res) => {
     const sampleId = req.params.id.replace(/\.wav$/, "");
@@ -1538,7 +1782,7 @@ CRITICAL: Do NOT return Steve Jobs, Neil Gaiman, or Carl Sagan quotes unless the
     const matched = currentDB.samples.find(s => s.id === sampleId);
     if (matched) {
       if (hasFFmpeg) {
-        console.log(`Lazy harvesting real audio sample on-the-fly for ID: ${sampleId}`);
+        console.log(`[LAZY-HARVEST] Triggered for ${sampleId} — file did not exist at ${localAudioPath}`);
         harvestRealAudio(matched.video_id, matched.start_time, matched.duration, localAudioPath)
           .then((success) => {
             if (success && fs.existsSync(localAudioPath)) {

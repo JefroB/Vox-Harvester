@@ -12,11 +12,16 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch: process.env.DISABLE_HMR === 'true' ? null : {
+        ignored: ['**/vocal_harvester_db.json', '**/harvested_samples/**', '**/audio_cache/**', '**/.hypothesis/**'],
+      },
+    },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./tests/setup.ts'],
+      include: ['tests/**/*.{test,spec}.?(c|m)[jt]s?(x)', 'tests/test_*.tsx'],
     },
   };
 });

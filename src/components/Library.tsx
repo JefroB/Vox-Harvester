@@ -32,10 +32,19 @@ export default function Library({
   const progressIntervalRef = useRef<any>(null);
   const speechUtteranceRef = useRef<any>(null);
 
+  // Vocal isolation state
+  const [isolatingIds, setIsolatingIds] = useState<Record<string, boolean>>({});
+  const [isolationErrors, setIsolationErrors] = useState<Record<string, string>>({});
+
   // Custom Tag form states
   const [addingTagSampleId, setAddingTagSampleId] = useState<string | null>(null);
   const [newTagCategory, setNewTagCategory] = useState("emotion");
   const [newTagValue, setNewTagValue] = useState("");
+
+  // Polling state
+  const [isolationJobs, setIsolationJobs] = useState<Record<string, { jobId: string; status: string; error?: string }>>({});
+  const pollingIntervalsRef = useRef<{ [sampleId: string]: NodeJS.Timeout | null }>({});
+  const pollingStartTimesRef = useRef<{ [sampleId: string]: number }>({});
 
   const fetchLibrary = async () => {
     setIsLoading(true);
@@ -173,6 +182,117 @@ export default function Library({
     }
   };
 
+  /** Trigger vocal isolation for a sample via POST /api/samples/:id/isolate */
+  const handleIsolateVocals = async (sampleId: string) => {
+    setIsolatingIds((prev) => ({ ...prev, [sampleId]: true }));
+    setIsolationErrors((prev) => {
+      const next = { ...prev };
+      delete next[sampleId];
+      return next;
+    });
+
+    try {
+      const res = await fetch(`/api/samples/${sampleId}/isolate`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const msg = body?.error || `Request failed (${res.status})`;
+        setIsolationErrors((prev) => ({ ...prev, [sampleId]: msg }));
+        setIsolatingIds((prev) => ({ ...prev, [sampleId]: false }));
+        return;
+      }
+
+      const data = await res.json();
+      if (data.jobId) {
+        startPolling(sampleId, data.jobId);
+      }
+    } catch (e: any) {
+      const msg = e?.message || "Network error";
+      setIsolationErrors((prev) => ({ ...prev, [sampleId]: msg }));
+      setIsolatingIds((prev) => ({ ...prev, [sampleId]: false }));
+    }
+  };
+
+  /** Start polling GET /api/jobs/:jobId every 3s with a 180s timeout */
+  const startPolling = (sampleId: string, jobId: string) => {
+    pollingStartTimesRef.current[sampleId] = Date.now();
+    setIsolationJobs((prev) => ({ ...prev, [sampleId]: { jobId, status: "pending" } }));
+
+    pollingIntervalsRef.current[sampleId] = setInterval(async () => {
+      const elapsed = Date.now() - (pollingStartTimesRef.current[sampleId] || 0);
+
+      // 180s timeout — stop polling and show timeout error
+      if (elapsed >= 180000) {
+        stopPolling(sampleId);
+        setIsolatingIds((prev) => ({ ...prev, [sampleId]: false }));
+        setIsolationErrors((prev) => ({ ...prev, [sampleId]: "Operation timed out after 180 seconds" }));
+        setIsolationJobs((prev) => {
+          const next = { ...prev };
+          delete next[sampleId];
+          return next;
+        });
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`);
+        if (!res.ok) return; // Transient error — keep polling
+
+        const data = await res.json();
+        setIsolationJobs((prev) => ({ ...prev, [sampleId]: { jobId, status: data.status, error: data.error } }));
+
+        if (data.status === "completed") {
+          stopPolling(sampleId);
+          setIsolatingIds((prev) => ({ ...prev, [sampleId]: false }));
+          setIsolationJobs((prev) => {
+            const next = { ...prev };
+            delete next[sampleId];
+            return next;
+          });
+          fetchLibrary();
+        } else if (data.status === "failed") {
+          stopPolling(sampleId);
+          setIsolatingIds((prev) => ({ ...prev, [sampleId]: false }));
+          setIsolationErrors((prev) => ({
+            ...prev,
+            [sampleId]: data.error || "Isolation failed",
+          }));
+          setIsolationJobs((prev) => {
+            const next = { ...prev };
+            delete next[sampleId];
+            return next;
+          });
+        }
+      } catch {
+        // Network error during poll — continue polling, don't abort
+      }
+    }, 3000);
+  };
+
+  /** Stop polling for a specific sample and clean up refs */
+  const stopPolling = (sampleId: string) => {
+    if (pollingIntervalsRef.current[sampleId]) {
+      clearInterval(pollingIntervalsRef.current[sampleId]!);
+      delete pollingIntervalsRef.current[sampleId];
+    }
+    delete pollingStartTimesRef.current[sampleId];
+  };
+
+  // Clean up all polling intervals on unmount
+  useEffect(() => {
+    return () => {
+      Object.keys(pollingIntervalsRef.current).forEach((id) => {
+        if (pollingIntervalsRef.current[id]) {
+          clearInterval(pollingIntervalsRef.current[id]!);
+        }
+      });
+      pollingIntervalsRef.current = {};
+      pollingStartTimesRef.current = {};
+    };
+  }, []);
+
   const clearFacets = () => {
     setSelectedCategory("");
     setSelectedTagValue("");
@@ -293,6 +413,9 @@ export default function Library({
           {samples.map((sample) => {
             const isPlaying = activePreviewId === `${sample.video_id}-${sample.start_time}`;
             const isAddingTag = addingTagSampleId === sample.id;
+            const isIsolatingSample = isolatingIds[sample.id];
+            const isolationError = isolationErrors[sample.id];
+            const jobInfo = isolationJobs[sample.id];
 
             return (
               <div 
@@ -340,6 +463,30 @@ export default function Library({
                       <span className="text-[9px] font-mono">WAV</span>
                     </a>
 
+                    {/* Isolate Vocals Button */}
+                    {!sample.isolated_path && (
+                      <button
+                        onClick={() => handleIsolateVocals(sample.id)}
+                        disabled={isIsolatingSample}
+                        className={`p-1 px-1.5 text-xs text-slate-400 hover:text-slate-100 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded transition flex items-center gap-1 ${
+                          isIsolatingSample ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                        title="Isolate vocals using AI"
+                      >
+                        {isIsolatingSample ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span className="text-[9px] font-mono">Isolating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span className="text-[9px] font-mono">Isolate</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
                     <button 
                       onClick={() => handleDeleteSample(sample.id, sample.video_id, sample.start_time)}
                       className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/20 rounded transition"
@@ -352,7 +499,7 @@ export default function Library({
 
                 {/* Waveform peak viewer */}
                 <div 
-                  className="bg-slate-900/40 relative h-12 rounded border border-slate-900/80 mb-3 flex items-center justify-around px-2 overflow-hidden group cursor-pointer"
+                  className="bg-slate-950/40 relative h-12 rounded border border-slate-900/80 mb-3 flex items-center justify-around px-2 overflow-hidden group cursor-pointer"
                   onClick={() => handleTogglePlay(sample)}
                 >
                   {/* Procedural peaks */}
@@ -457,6 +604,22 @@ export default function Library({
                     )}
                   </div>
                 </div>
+
+                {/* Isolation Error Message */}
+                {isolationError && (
+                  <div className="mt-2 text-[10px] text-red-400 bg-red-950/20 border border-red-900/30 rounded px-2 py-1">
+                    {isolationError}
+                  </div>
+                )}
+
+                {/* Isolation Job Status */}
+                {jobInfo && (
+                  <div className="mt-2 text-[10px] font-mono text-slate-300 bg-slate-900/40 border border-slate-800/50 rounded px-2 py-1 flex items-center gap-1.5">
+                    <Loader2 className="w-3 h-3 animate-spin text-cyan-400" />
+                    <span className="text-slate-400">Status:</span>
+                    <span className="text-cyan-300">{jobInfo.status}</span>
+                  </div>
+                )}
 
                 {/* Embedded dynamic custom tag builder inline */}
                 {isAddingTag && (

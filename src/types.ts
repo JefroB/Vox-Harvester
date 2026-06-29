@@ -30,6 +30,7 @@ export interface Sample {
   start_time: number;
   duration: number;
   file_path: string; // Local audio path or download API
+  isolated_path?: string; // API path to isolated vocals track (set after vocal isolation completes)
   energy_score: number;
   is_processed: boolean;
   createdAt: string;

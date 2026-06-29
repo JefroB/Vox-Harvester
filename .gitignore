@@ -28,11 +28,8 @@ Desktop.ini
 __pycache__/
 *.pyc
 
-# SubAgent-Coder internals
-.subagentcoder/__pycache__/
-.subagentcoder/*/__pycache__/
-.subagentcoder/tests/__pycache__/
-.subagentcoder/task_results.db
+# SubAgent-Coder
+.subagentcoder/
 
 # Hypothesis test cache
 .hypothesis/
@@ -43,5 +40,11 @@ __pycache__/
 # Node (if applicable)
 node_modules/
 
+# Audio files (large binary, local only)
+harvested_samples/*.wav
+audio_cache/
+vocal_harvester_db.json
+
+# Kiro
 .kiro/
-.subagentcoder/
+
